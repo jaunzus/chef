@@ -14,6 +14,8 @@
 
 import json
 import os
+import tempfile
+import uuid
 from datetime import datetime, timedelta
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -28,9 +30,17 @@ def _load_json(path: str) -> dict:
 
 
 def _save_json(path: str, data: dict) -> None:
+    """Atomic write — 先写临时文件再 os.replace"""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=DATA_DIR)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def get_cache() -> dict:

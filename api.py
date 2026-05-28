@@ -12,10 +12,17 @@
 import json
 import os
 import sys
+import uuid
+import tempfile
 from datetime import datetime
 from typing import Any, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+
+
+def _gen_id(prefix: str = "") -> str:
+    """生成唯一 ID（uuid hex 前8位 + 可选前缀）"""
+    return f"{prefix}{uuid.uuid4().hex[:8]}"
 
 
 def _load(filename: str) -> dict:
@@ -27,10 +34,24 @@ def _load(filename: str) -> dict:
 
 
 def _save(filename: str, data: dict) -> None:
-    path = os.path.join(DATA_DIR, filename)
+    """
+    Atomic write: 先写临时文件，成功后再 os.replace 到正式文件。
+    防止写一半 crash 导致原数据损坏。
+    """
     data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    path = os.path.join(DATA_DIR, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # 写临时文件
+    fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=DATA_DIR)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        # 原子替换
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 # ── 食材库存接口 ──
@@ -49,7 +70,7 @@ def inventory_add(name: str, category: str, quantity: float = 1,
     """添加食材到库存，返回新增食材 ID"""
     data = _load("inventory.json")
     items = data.get("items", [])
-    new_id = f"inv_{len(items) + 1:03d}"
+    new_id = _gen_id("inv_")
     items.append({
         "id": new_id, "name": name, "category": category,
         "quantity": quantity, "unit": unit,
@@ -102,7 +123,7 @@ def recipe_add(name: str, ingredients: list, seasonings: list,
     """添加菜谱到菜谱库"""
     data = _load("recipes.json")
     recipes = data.get("recipes", [])
-    rid = f"rec_{len(recipes) + 1:03d}"
+    rid = _gen_id("rec_")
     recipe = {
         "id": rid, "name": name,
         "category": kwargs.get("category", "家常菜"),
@@ -136,7 +157,7 @@ def meal_log(date: str, meal_type: str, dishes: list,
     """记录一餐"""
     data = _load("meal_log.json")
     records = data.get("records", [])
-    mid = f"meal_{len(records) + 1:03d}"
+    mid = _gen_id("meal_")
     record = {
         "id": mid, "date": date, "meal_type": meal_type,
         "dishes": dishes,
@@ -191,7 +212,7 @@ def shopping_add(name: str, category: str, quantity: float = 1,
     """添加购物项"""
     data = _load("shopping_list.json")
     items = data.get("items", [])
-    sid = f"shop_{len(items) + 1:03d}"
+    sid = _gen_id("shop_")
     items.append({
         "id": sid, "name": name, "category": category,
         "quantity": quantity, "unit": unit,
