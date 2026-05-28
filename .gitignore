@@ -1,0 +1,13 @@
+# 用户个人数据（不上传 GitHub）
+data/inventory.json
+data/meal_log.json
+data/meal_plans.json
+data/recipe_cache.json
+data/recipes.json
+data/restrictions.json
+data/shopping_list.json
+data/taste_prefs.json
+
+# Python
+__pycache__/
+*.pyc
